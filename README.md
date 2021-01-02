@@ -1,4 +1,4 @@
-# rock-paper-scissors
+# rps
 Rock paper scissors game written in Haskell with Gloss library.
 
 ![exampe](src/assets/example.gif)
