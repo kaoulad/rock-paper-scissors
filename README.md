@@ -1,7 +1,15 @@
 # rps
 Rock paper scissors game written in Haskell with Gloss library.
 
-![exampe](src/assets/example.gif)
+## How to run
+```
+cabal v2-install
+cabal v2-run
+```
+
+## Usage
+
+![example](src/assets/example.png)
 
 **Events**
 - ``r`` => Rock
