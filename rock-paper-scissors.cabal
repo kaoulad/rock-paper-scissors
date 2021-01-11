@@ -7,8 +7,8 @@ synopsis:            Rock Paper Scissors game written in Haskell
 -- description:
 license:             BSD3
 license-file:        LICENSE
-author:              mortim1
-maintainer:          mortim1@protonmail.com
+author:              kaoulad
+maintainer:          kaoulad@pm.me
 -- copyright:
 category:            Game
 build-type:          Simple
