@@ -1,9 +1,8 @@
-# rps
+# rock-paper-scissors
 Rock paper scissors game written in Haskell with Gloss library.
 
 ## How to run
 ```
-cabal v2-install
 cabal v2-run
 ```
 
