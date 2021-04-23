@@ -7,8 +7,8 @@ synopsis:            Rock Paper Scissors game written in Haskell
 -- description:
 license:             BSD3
 license-file:        LICENSE
-author:              kaoulad
-maintainer:          kaoulad@pm.me
+author:              mortim
+maintainer:          aouladkarim010@gmail.com
 -- copyright:
 category:            Game
 build-type:          Simple
@@ -17,11 +17,12 @@ cabal-version:       >=1.10
 
 executable rock-paper-scissors
   main-is:             Main.hs
-  -- other-modules:
+  other-modules:       Game.Pictures
   -- other-extensions:
   build-depends:       base >=4.12 && <4.13,
-		       gloss,
-		       random
+		                   gloss,
+                       transformers,
+                       MonadRandom
 
   hs-source-dirs:      src
   default-language:    Haskell2010

@@ -1,95 +1,125 @@
 module Main where
 
+---
+import Control.Monad.Random
+import Control.Monad.Trans.RWS (RWS, runRWS, rws)
+import Control.Monad.Trans.State
+import Game.Pictures
 import Graphics.Gloss
-import Graphics.Gloss.Interface.IO.Game
-import System.Random
+import Graphics.Gloss.Interface.Pure.Game
 
--- Title game, Boolean for know if is game started,CPU picture, Score, User picture
-type Model = (String, Bool, Picture, Int, Picture)
+-------------------------------------------------------------------
 
--------------------------------------
+data Move = Rock | Paper | Scissors deriving (Eq, Enum, Show)
 
-window :: Display
-window = InWindow "Rock Paper Scissors" (800,600) (200,200)
+data Round = Round {playerMove, aiMove :: Move}
 
-background :: Color
-background = white
+data Assets = Assets {rockPicture, paperPicture, scissorsPicture :: Picture}
 
-fps :: Int
-fps = 60
+data Model = Model
+  { running :: Bool,
+    rounds :: [Round],
+    userScore :: Int,
+    aiScore :: Int
+  }
 
-------------------------------------
+type View a = RWS Assets Picture () a
 
-randomChoiceCPU :: IO Int -> Picture -> Picture -> Picture -> IO (Picture, Int)
-randomChoiceCPU v rock paper scissors = do
-                                          n <- v
-                                          if n == 1 then pure (rock,1) else if n == 2 then pure (paper,2) else pure (scissors,3)
+type Controller a = StateT Model (Rand StdGen) a
 
-whoWon :: String -> Int -> String
-whoWon "rock" 1 = "Equality !"
-whoWon "rock" 2 = "You lost..."
-whoWon "rock" 3 = "You won !"
-whoWon "paper" 1 = "You won !"
-whoWon "paper" 2 = "Equality !"
-whoWon "paper" 3 = "You lost..."
-whoWon "scissors" 1 = "You lost..."
-whoWon "scissors" 2 = "You won !"
-whoWon "scissors" 3 = "Equality !"
+----------------------------------------------------------------------
+--------------------------- Utils ------------------------------------
+----------------------------------------------------------------------
 
-whoWonScore :: String -> Int -> Int -> Int
-whoWonScore "rock" 1 k = k
-whoWonScore "rock" 2 k = if k == 0 then k else k-1
-whoWonScore "rock" 3 k = k+1
-whoWonScore "paper" 1 k = k+1
-whoWonScore "paper" 2 k = k
-whoWonScore "paper" 3 k = if k == 0 then k else k-1
-whoWonScore "scissors" 1 k = if k == 0 then k else k-1
-whoWonScore "scissors" 2 k = k+1
-whoWonScore "scissors" 3 k = k
+--Rock <= Paper ; Paper <= Scissors ; Scissors <= Rock
+winner :: Move -> Move -> Ordering
+winner user ai
+  | user == ai = EQ
+  | (user == Rock && ai == Paper) || (user == Paper && ai == Scissors) || (user == Scissors && ai == Rock) = LT
+  | otherwise = GT
 
--------------------------------------
+--------------
 
-draw :: Picture -> Picture -> Picture -> Model -> IO Picture
-draw rock paper scissors (s, b, w, k,u) = if b then pure (Pictures [textPic s, setInfos "'r' key for rock | 'p' key for paper | 's' key for scissors", setTextUser, setTextCPU, picUser u, picCPU w, score "Score:"]) else pure (Pictures [textPic s,setInfos "'r' key for rock | 'p' key for paper | 's' key for scissors", setTextUser, setTextCPU])
-        where textPic t = Scale 0.5 0.5 (Translate (-700) 410 (Text t))
-              setInfos t = Color red $ Scale 0.15 0.15 (Translate (-1980) 1000 (Text t))
-              setTextUser = Scale 0.15 0.15 (Translate (-1200) (-1300) (Text "User"))
-              setTextCPU = Scale 0.15 0.15 (Translate (-1200) 100 (Text "CPU"))
-              -------
-              picUser n = Translate (0) (-200) n
-              picCPU l = Translate 0 10 l
-              score m = Color blue  $ Scale 0.2 0.2 (Translate (50) 1050 (Text (m++show k)))
+randomMove :: Controller Move
+randomMove = do
+  randomNumber <- getRandomR (0, 2)
+  return $ toEnum (fromInteger randomNumber)
 
--------------------------------------
-  
+putState :: Move -> Controller ()
+putState move = do
+  (Model running rounds userScore aiScore) <- get
+  aiMove <- randomMove
+  case length rounds of
+    3 -> put $ Model False [] 0 0
+    _ -> case winner move aiMove of
+      EQ -> put $ Model True ((Round move aiMove) : rounds) userScore aiScore -- Add one more round
+      LT -> put $ Model True ((Round move aiMove) : rounds) userScore (aiScore + 1)
+      GT -> put $ Model True ((Round move aiMove) : rounds) (userScore + 1) aiScore
+  return ()
 
-inputHandler :: Picture -> Picture -> Picture -> Event -> Model -> IO Model  
-inputHandler rock paper scissors (EventKey (Char 'r') Down _ _) (t,b,w,k,u) = do                               
-                                                                            tuple_ <- randomChoiceCPU (randomRIO (1,3)) rock paper scissors
-                                                                            let score= whoWonScore "rock" (snd $ tuple_) k
-                                                                            return (whoWon "rock" (snd $ tuple_), True, (fst $ tuple_), score,rock)
+--------------
 
-inputHandler rock paper scissors (EventKey (Char 'p') Down _ _) (t,b,w,k,u) = do
-                                                                            tuple_ <- randomChoiceCPU (randomRIO (1,3)) rock paper scissors
-                                                                            let score= whoWonScore "paper" (snd $ tuple_) k
-                                                                            return (whoWon "paper" (snd $ tuple_), True, (fst $ tuple_), score,paper)
+pic :: Move -> Assets -> Picture
+pic move assets = case move of
+  Rock -> rock
+  Paper -> paper
+  Scissors -> scissors
+  where
+    (Assets rock paper scissors) = assets
 
-inputHandler rock paper scissors (EventKey (Char 's') Down _ _ ) (t,b,w,k,u) = do
-                                                                            tuple_ <- randomChoiceCPU (randomRIO (1,3)) rock paper scissors
-                                                                            let score= whoWonScore "scissors" (snd $ tuple_) k
-                                                                            return (whoWon "scissors" (snd $ tuple_), True, (fst $ tuple_), score,scissors)
-inputHandler _ _ _ _ (t,b,w,k,u) = return (t,b,w,k,u)
+render :: Assets -> Model -> Picture
+render assets model = case running of
+  True -> case (length rounds) of
+    3 -> Pictures $ baseInterface ++ [userPic (pic playerMove assets), aiPic (pic aiMove assets), winnerPic userScore aiScore]
+    _ -> Pictures $ baseInterface ++ [userPic (pic playerMove assets), aiPic (pic aiMove assets)]
+  False -> Pictures $ baseInterface
+  where
+    baseInterface = [title, userText, aiText, aiScorePic aiScore, userScorePic userScore, nbRounds (length rounds)]
+    (Model running rounds userScore aiScore) = model
+    (Round playerMove aiMove) = head rounds
 
+----------------------------------------------------------------------
+--------------------------- View -------------------------------------
+----------------------------------------------------------------------
 
-updateFunc :: Float -> Model -> IO Model
-updateFunc _ (t,b,w,k,u) = pure (t,b,w,k,u)
+draw :: Model -> View ()
+draw model = rws $ \r _ -> ((), (), render r model)
 
--------------------------------------
+runView :: Assets -> View () -> Picture
+runView assets rws' = let ((), (), w) = runRWS rws' assets () in w
+
+----------------------------------------------------------------------
+--------------------------- Controller -------------------------------
+----------------------------------------------------------------------
+
+inputHandler :: Event -> Controller ()
+inputHandler (EventKey (Char 'r') Down _ _) = putState Rock
+inputHandler (EventKey (Char 'p') Down _ _) = putState Paper
+inputHandler (EventKey (Char 's') Down _ _) = putState Scissors
+inputHandler _ = return () -- a
+
+runController :: Controller () -> (Model, StdGen) -> (Model, StdGen)
+runController s (m, g) = runRand (execStateT s m) g
+
+-------------------------------------------------------------------
+
+update :: Float -> (Model, StdGen) -> (Model, StdGen)
+update _ world = world
+
+-------------------------------------------------------------------
 
 main :: IO ()
 main = do
-        rock <- loadBMP "src/assets/rock.bmp"
-        paper <- loadBMP "src/assets/paper.bmp"
-        scissors <- loadBMP "src/assets/scissors.bmp"
-
-        playIO window background fps ("Rock Paper Scissors", False, Blank, 0, Blank) (draw rock paper scissors) (inputHandler rock paper scissors) updateFunc
+  -- Assets
+  rock <- loadBMP "src/assets/rock.bmp"
+  paper <- loadBMP "src/assets/paper.bmp"
+  scissors <- loadBMP "src/assets/scissors.bmp"
+  -- Generator number
+  generator <- getStdGen
+  -- Parameters
+  let display = (InWindow "Rock Paper Scissors" (800, 600) (200, 200))
+  let fps = 60
+  let world = ((Model False [] 0 0), generator)
+  let assets = Assets rock paper scissors
+  --
+  play display white fps world (\(model, _) -> runView assets (draw model)) (\event -> runController (inputHandler event)) update
